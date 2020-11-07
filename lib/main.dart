@@ -11,14 +11,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primaryColor: Colors.blueAccent,
       ),
-      home: Scaffold(
-        appBar: AppBar(
-          title: Text('Lua Negra Chat App', style: TextStyle(fontSize: 26.0, color: Colors.white, fontWeight: FontWeight.bold),),
-        ),
-        body: Center(
-          child: Text('Bem-vindo Lua Negra Chat App', style: TextStyle(fontSize: 20.0, color: Colors.blueAccent),),
-        ),
-      ),
+      home: LoginScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
