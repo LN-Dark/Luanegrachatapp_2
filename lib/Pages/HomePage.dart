@@ -5,11 +5,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:telegramchatapp/Pages/ChattingPage.dart';
-import 'package:telegramchatapp/main.dart';
-import 'package:telegramchatapp/models/user.dart';
-import 'package:telegramchatapp/Pages/AccountSettingsPage.dart';
-import 'package:telegramchatapp/Widgets/ProgressWidget.dart';
+import 'package:chatapp2/Pages/ChattingPage.dart';
+import 'package:chatapp2/main.dart';
+import 'package:chatapp2/models/user.dart';
+import 'package:chatapp2/Pages/AccountSettingsPage.dart';
+import 'package:chatapp2/Widgets/ProgressWidget.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -18,11 +18,14 @@ class HomeScreen extends StatefulWidget {
   final String firebaseUserID;
   HomeScreen({Key key, @required this.firebaseUserID}) : super(key: key);
   @override
-  State createState() => HomeScreenState();
+  State createState() => new HomeScreenState(firebaseUserID : firebaseUserID);
 }
 
 class HomeScreenState extends State<HomeScreen> {
+  HomeScreenState({Key key, @required this.firebaseUserID});
   TextEditingController searchTextEditingController = TextEditingController();
+  Future<QuerySnapshot> futureSearchResult;
+  final String firebaseUserID;
 
   homePageHeader(){
     return AppBar(
@@ -58,9 +61,18 @@ class HomeScreenState extends State<HomeScreen> {
               onPressed: emptyTextFormField,
             ),
           ),
+          onFieldSubmitted: controlSearching,
         ),
       ),
     );
+  }
+
+  controlSearching(String strSearch){
+    Future<QuerySnapshot> allFoundUsers = Firestore.instance.collection("users")
+        .where("nickname", isGreaterThanOrEqualTo: strSearch).getDocuments();
+    setState(() {
+      futureSearchResult = allFoundUsers;
+    });
   }
 
   emptyTextFormField(){
@@ -71,24 +83,91 @@ class HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: homePageHeader(),
-      body:  RaisedButton.icon(onPressed: logoutUser, icon: Icon(Icons.logout), label: Text("Sign Out")),
+      body: futureSearchResult == null ? displayNoSearchResultScreen() : displayUserFoundScreen(),
     );
-
   }
 
-  final GoogleSignIn googleSignIn = GoogleSignIn();
-  Future<Null> logoutUser() async{
-    await FirebaseAuth.instance.signOut();
-    await googleSignIn.disconnect();
-    await googleSignIn.signOut();
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => MyApp()), (Route<dynamic> route) => false);
+  displayUserFoundScreen(){
+    return FutureBuilder(
+      future: futureSearchResult,
+      builder: (context, dataSnapshot){
+        if(!dataSnapshot.hasData){
+          return circularProgress();
+        }
+        List<UserResult> searchUserResult = [];
+        dataSnapshot.data.documents.forEach((document){
+          User eachUser = User.fromDocument(document);
+          UserResult userResult = UserResult(eachUser);
+          if(firebaseUserID != document["id"]){
+            searchUserResult.add(userResult);
+          }
+        });
+        return ListView(children: searchUserResult);
+      },
+    );
+  }
+
+  displayNoSearchResultScreen(){
+    final Orientation orientation = MediaQuery.of(context).orientation;
+    return Container(
+      child: Center(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            Icon(Icons.group, color: Colors.lightBlueAccent, size: 200.0,),
+            Text(
+              "Utilizadores",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.lightBlueAccent, fontSize: 50.0, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
 class UserResult extends StatelessWidget
 {
+  final User eachUser;
+  UserResult(this.eachUser);
   @override
   Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.all(4.0),
+      child: Container(
+        color: Colors.white,
+        child: Column(
+          children: <Widget>[
+            GestureDetector(
+              onTap: () => sendUserToChatPage(context),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.black, backgroundImage: CachedNetworkImageProvider(eachUser.photoUrl),
+                ),
+                title: Text(
+                  eachUser.nickname,
+                  style: TextStyle(
+                    color: Colors.black, fontSize: 16.0, fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  "Data de registo:   " + DateFormat("dd MMMM yyyy - hh:mm:aa").format(DateTime.fromMillisecondsSinceEpoch(int.parse(eachUser.createdAt))),
+                  style: TextStyle(color: Colors.grey, fontSize: 14.0, fontStyle: FontStyle.italic),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
+  sendUserToChatPage(BuildContext context){
+    Navigator.push(context, MaterialPageRoute(builder: (context)=> Chat(
+        receiverId: eachUser.id,
+        receiverAvatar: eachUser.photoUrl,
+        receiverName: eachUser.nickname
+    )));
   }
 }
